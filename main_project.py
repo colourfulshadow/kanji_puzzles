@@ -1,8 +1,11 @@
 import random
 import bs4
 import pandas as pd
-import convert
+import convert  # спасибо https://github.com/aleckretch/Romaji-to-Japanese-Converter
 import requests
+
+M = 3  # минимальное количество слов в ребусе
+N = 4  # предпочтительное количество слов в ребусе
 
 
 # читаем лист из экселя
@@ -25,13 +28,18 @@ max_grade = int(input('Enter max grade: '))
 dat = read_sheet('kanji_database1.xlsx', max_grade)
 
 # отбираем в датасет чтения, встречающиеся более трех раз
-filtered = dat[dat['count'] >= 3]
+filtered = dat[dat['count'] >= M]
 
 # создаем множество уникальных чтений
 unique = set(filtered.loc[:, 'reading'])
 
-# выбираем из множества один элемент (и удаляем его)
-reading = unique.pop()
+# задаем чтение с клавиатуры
+reading = input('Введите чтение или любой символ: ')
+if reading not in unique:
+    print('С этим чтением нельзя сделать ребус. Выберем другое.')
+
+    # или выбираем чтение из множества (и удаляем его)
+    reading = unique.pop()
 print(reading, convert.romajiToJapanese(reading))
 
 # отбираем строки из датасета только с выбранным чтением
@@ -43,49 +51,80 @@ writings = list(choice.loc[:, 'writing'])
 # конвертируем чтение с ромадзи в хирагану
 reading = convert.romajiToJapanese(reading)
 
-# если нашлось больше 4 иероглифов, отбираем 4
-if len(writings) > 4:
-    writings = random.choices(writings, k=4)
+# если нашлось больше 4 иероглифов, случайным образом отбираем 4
+# if len(writings) > 4:
+#     writings = random.sample(writings, k=4)
 
 print('иероглифы :', writings)
 
-components = []
+word_cards = []
 for writing in writings:
-    # конструктор поискового запроса
+
+    # создаем конструктор поискового запроса
     url = 'https://www.kanshudo.com/searchq?q=' + writing + ':' + reading
     # парсим страницу
     url = requests.get(url)
     soup = bs4.BeautifulSoup(url.content, 'html.parser')
 
-    # создаем список слов с данным иероглифом с заданным чтением
-    words = soup.find_all(class_="f_container")
-    # выбираем слово, пока что случайным образом
-    while True:
-        word = random.choice(words)
-        hiragana = list(word.children)[0].get_text()
-        kanji = list(word.children)[1].get_text()
-        # проверяем, что слово составное
-        if len(kanji) > 1:
-            break
+    # создаем список словарных карточек с данным иероглифом с заданным чтением
+    elements = soup.find_all(class_="jukugorow first last")
+    level = 1
+    index = 1
 
-    # создаем ребус, заменяя в словах иеролгифы с одинаковыми чтениями на пробелы
-    puzzle = kanji.replace(writing, '|__|')
+    # определяем самый легкий доступный уровень jlpt
+    for element in elements:
+        jlpt = element.find(class_="w_ref")
+        if jlpt is not None and int(jlpt.get_text()) > level:
+            level = int(jlpt.get_text())
+            index = elements.index(element)
 
-    # сохраняем элементы ребуса в список
-    components.append(dict([('hiragana', hiragana), ('kanji', kanji), ('puzzle', puzzle)]))
-    # print(hiragana, kanji, puzzle)
+    # парсим словарную карточку по полученному индексу
+    element = elements[index]
+    word = element.find(class_='f_container')
+    jlpt = element.find(class_="w_ref")
+    if jlpt is not None:
+        jlpt = int(jlpt.get_text())
+    # meaning = element.find_all(class_="vm")
+    # print(len(meaning), meaning[0].get_text(), meaning)
+
+    hiragana = list(word.children)[0].get_text()
+    kanji = list(word.children)[1].get_text()
+
+
+    # придумать, как запустить это в цикл, чтобы он искал следующее слово!
+    if len(kanji) > 1:
+        # создаем ребус, заменяя в словах иеролгифы с одинаковыми чтениями на пробелы
+        puzzle = kanji.replace(writing, '|__|')
+
+        # сохраняем элементы ребуса в список словарей
+        word_cards.append(dict([('hiragana', hiragana), ('kanji', kanji), ('puzzle', puzzle), ('jlpt', jlpt)]))
+
+if len(word_cards) > N:
+    for_printing = []
+    for i in range(5, 0, -1):
+        for word_card in word_cards:
+            if word_card['jlpt'] == i:
+                for_printing.append(word_card)
+    for word_card in word_cards:
+        if word_card['jlpt'] is None:
+            for_printing.append(word_card)
+
+    print(for_printing)
+    word_cards = for_printing
 
 print('Ребус')
 print(reading)
-for component in components:
-    print(component['puzzle'])
+for word_card in word_cards[:N]:
+    print(f"{word_card['puzzle']} (N{word_card['jlpt']})")
 print()
-print('Подсказка')
-for component in components:
-    print(f"{component['puzzle']} читается как {component['hiragana']}")
+print('Подсказка 1')
+for word_card in word_cards[:N]:
+    print(f"{word_card['puzzle']} читается как {word_card['hiragana']}")
+# print()
+# print('Подсказка 2')
+# for component in components:
+#     print(f"{component['puzzle']} на английском будет {component['meaning']}")
 print()
 print('Ответ')
-for component in components:
-    print(f"{component['puzzle']} читается как {component['hiragana']} и пишется как {component['kanji']}")
-
-
+for word_card in word_cards[:N]:
+    print(f"{word_card['puzzle']} пишется как {word_card['kanji']} и читается как {word_card['hiragana']} ")
