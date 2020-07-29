@@ -8,31 +8,43 @@ M = 3  # минимальное количество слов в ребусе
 N = 4  # предпочтительное количество слов в ребусе
 
 
-# читаем лист из экселя
-def read_sheet(filename, level):
-    xl = pd.ExcelFile(filename)
-    df = xl.parse(xl.sheet_names[level - 1])
+# читаем файл эксель
+def read_excel(filename):
+    df = pd.ExcelFile(filename).parse()
     df.fillna(method='ffill', inplace=True)
-    df['reading'] = df['on']
-    df['writing'] = df['kanji']
-    df['count'] = df.groupby('on').transform('count').loc[:, 'reading']
-
-    df.set_index(['kanji', 'on'], inplace=True)
     return df
 
 
-def choose_sheet():
-    # задаем максимальный уровень
-    max_grade = int(input('Enter max grade: '))
+# приводим считанный датафрейм к удобному для работы с ним формату
+def transform_dataframe(df):
+    df.loc[:, 'reading'] = df['on']
+    df.loc[:, 'writing'] = df['kanji']
 
-    # читаем соответствующий лист в датафрейм
-    dat = read_sheet('kanji_database1.xlsx', max_grade)
-    return dat
+    # задаем с клавиатуры уровень или выставляем максимальный (6) по умолчанию
+    max_grade = input('Выберите максималный уровень (1-6) или любой символ:')
+    try:
+        max_grade = int(max_grade)
+        if not 0 < max_grade < 7:
+            max_grade = 6
+    except ValueError:
+        max_grade = 6
+
+    # при необходимости обрезаем датасет
+    if max_grade < 6:
+        df = df.loc[df['grade'] <= max_grade].copy()
+
+    # добавляем столбец с частотностью чтений в датасете
+    df.loc[:, 'count'] = df.groupby('on').transform('count').loc[:, 'reading']
+    df.set_index(['kanji', 'on'], inplace=True)
+
+    # оставляем строки только с теми чтениями, частотность которых удовлетворяет минимальному значеню
+    df = df.loc[df['count'] >= M].copy()
+    return df
 
 
-def choose_reading_and_writings(df):
+def choose_reading_and_writings(filtered):
     # отбираем в датасет чтения, соответствующие условию
-    filtered = df[df['count'] >= M]
+    # filtered = df[df['count'] >= M]
 
     # создаем множество уникальных чтений
     unique = set(filtered.loc[:, 'reading'])
@@ -134,7 +146,4 @@ def printing(word_cards):
     for word_card in word_cards[:N]:
         print(f"{word_card['puzzle']} пишется как {word_card['kanji']} и читается как {word_card['hiragana']} ")
 
-
 # printing(create_puzzle(*choose_reading_and_writings(choose_sheet())))
-
-

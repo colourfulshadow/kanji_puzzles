@@ -1,5 +1,5 @@
 # по y - 840, по x - 590, отсчет из нижнего левого угла
-
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -48,11 +48,16 @@ def print_puzzle(word_cards, sector):
     print_writings(word_cards)
 
 
-word_cards = functions.create_puzzle(*functions.choose_reading_and_writings(functions.choose_sheet()))
+word_cards = functions.create_puzzle(*functions.choose_reading_and_writings(functions.transform_dataframe(functions.read_excel('kanji_database_new.xlsx'))))
 filename = f"puzzles_pdf\puzzle_{word_cards[0]['reading']}.pdf"
-pdfmetrics.registerFont(TTFont('fireflysung', 'fireflysung.ttf'))
 c = canvas.Canvas(filename)
-c.setFont("fireflysung", 20)
+
+# pdfmetrics.registerFont(TTFont('fireflysung', r'fonts\fireflysung.ttf'))
+# c.setFont("fireflysung", 20)
+
+
+pdfmetrics.registerFont(UnicodeCIDFont('HeiseiMin-W3'))
+c.setFont("HeiseiMin-W3", 20)
 c.setStrokeColor('black')
 c.setStrokeAlpha(0.8)
 c.setFillColorRGB(1, 0, 1)
@@ -64,3 +69,5 @@ print_puzzle(word_cards, 1)
 
 c.showPage()
 c.save()
+
+functions.printing(word_cards)
